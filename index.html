@@ -1,42 +1,44 @@
 <!DOCTYPE html>
 <html lang="pt-BR">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Pulse</title>
-  <link rel="stylesheet" href="style.css" />
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <!-- Tela inicial -->
   <div id="app">
+    
+    <!-- Splash -->
     <div id="splash-screen" class="screen">
       <h1 class="logo">Pulse</h1>
     </div>
 
-    <!-- Tela de login/cadastro -->
+    <!-- Login / Cadastro -->
     <div id="auth-screen" class="screen hidden">
       <h2>Entrar ou Criar Conta</h2>
-      <input type="email" id="auth-email" placeholder="Email" />
-      <input type="password" id="auth-password" placeholder="Senha" />
+      <input type="email" id="auth-email" placeholder="Email">
+      <input type="password" id="auth-password" placeholder="Senha">
       <button id="btn-login-email">Entrar com Email</button>
       <button id="btn-register-email">Cadastrar com Email</button>
-      <hr />
+      <hr>
       <button id="btn-login-google">Entrar com Google</button>
       <button id="btn-login-facebook">Entrar com Facebook</button>
     </div>
 
-    <!-- Tela de check-in -->
+    <!-- Check-in -->
     <div id="checkin-screen" class="screen hidden">
       <h2>Onde você está?</h2>
       <select id="checkin-place">
-        <option value="barzinho">Barzinho do João</option>
-        <option value="boate">Boate X</option>
-        <option value="praca">Praça Central</option>
+        <option value="">Selecione...</option>
+        <option>Barzinho do João</option>
+        <option>Boate X</option>
+        <option>Praça Central</option>
       </select>
       <button id="btn-checkin">Confirmar Check-in</button>
     </div>
 
-    <!-- Tela principal de swipes -->
+    <!-- Swipe -->
     <div id="swipe-screen" class="screen hidden">
       <div id="cards-container"></div>
       <div class="actions">
@@ -45,48 +47,39 @@
       </div>
     </div>
 
-    <!-- Tela de match -->
+    <!-- Match -->
     <div id="match-screen" class="screen hidden">
       <h2>🎉 Deu Match!</h2>
-      <img id="matchUserA" class="avatar" />
-      <img id="matchUserB" class="avatar" />
+      <img id="matchUserA" class="avatar" src="">
+      <img id="matchUserB" class="avatar" src="">
       <p id="matchText"></p>
       <button id="btn-open-chat">Abrir Chat</button>
       <button id="btn-continue">Continuar vendo pessoas</button>
     </div>
 
-    <!-- Tela de chat -->
+    <!-- Chat -->
     <div id="chat-screen" class="screen hidden">
       <h2>Chat</h2>
       <div id="chat-messages"></div>
-      <input type="text" id="chat-input" placeholder="Digite uma mensagem..." />
+      <input id="chat-input" placeholder="Digite uma mensagem...">
       <button id="btn-send-chat">Enviar</button>
       <button id="btn-close-chat">Voltar</button>
     </div>
+
   </div>
 
-  <!-- Scripts principais -->
-  <script src="app.js"></script>
-
-  <!-- 🔥 Firebase (já configurado) -->
+  <!-- Firebase SDK -->
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-app.js";
-    import { 
-      getAuth, onAuthStateChanged, signInWithEmailAndPassword, 
-      createUserWithEmailAndPassword, GoogleAuthProvider, 
-      FacebookAuthProvider, signInWithPopup, signOut, updateProfile 
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+    import { getAuth, onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword, 
+             GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signOut, updateProfile } 
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-auth.js";
+    import { getFirestore, doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, serverTimestamp } 
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
+    import { getStorage, ref, uploadBytes, getDownloadURL } 
+      from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
 
-    import { 
-      getFirestore, doc, setDoc, getDoc, collection, 
-      addDoc, query, where, getDocs, serverTimestamp 
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js";
-
-    import { 
-      getStorage, ref, uploadBytes, getDownloadURL 
-    } from "https://www.gstatic.com/firebasejs/12.1.0/firebase-storage.js";
-
-    // Config do seu projeto Firebase
+    // Configuração do Firebase (seus dados)
     const firebaseConfig = {
       apiKey: "AIzaSyDmIMXJ5nDsNrmACkp9gzqlTKV9PC0Eczk",
       authDomain: "pulse-f5eff.firebaseapp.com",
@@ -96,22 +89,23 @@
       appId: "1:291405467781:web:f4bed7643f1041e0ef59ec"
     };
 
-    // Inicializa o Firebase
+    // Inicializa
     const app = initializeApp(firebaseConfig);
-
-    // Serviços
     const auth = getAuth(app);
     const db = getFirestore(app);
     const storage = getStorage(app);
 
-    // Expõe globalmente para o app.js
+    // Expor global para app.js
     window._fb = {
-      auth, db, storage,
+      app, auth, db, storage,
       onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
       GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signOut, updateProfile,
       doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, serverTimestamp,
       ref, uploadBytes, getDownloadURL
     };
   </script>
+
+  <!-- Seu script principal -->
+  <script type="module" src="app.js"></script>
 </body>
 </html>
