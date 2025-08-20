@@ -1,0 +1,34 @@
+/* Transições dos cards */
+.card {
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+.swipe-right {
+  transform: translateX(100%) rotate(20deg);
+  opacity: 0;
+}
+.swipe-left {
+  transform: translateX(-100%) rotate(-20deg);
+  opacity: 0;
+}
+
+/* Animação do "Deu Match!" */
+.match-animation {
+  animation: pulse 1.5s infinite;
+}
+@keyframes pulse {
+  0%   { transform: scale(1); }
+  50%  { transform: scale(1.1); }
+  100% { transform: scale(1); }
+}
+
+/* Slide-up genérico (opcional) */
+.slide-up {
+  animation: slideUp 0.5s forwards;
+}
+@keyframes slideUp {
+  from { transform: translateY(100%); opacity: 0; }
+  to   { transform: translateY(0);    opacity: 1; }
+}
+
+/* Badge escondido por padrão (mostrado via JS) */
+#likesBadge.hidden { display: none; }

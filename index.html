@@ -1,0 +1,410 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Pulse - Encontre pessoas próximas</title>
+  <!-- Tailwind + FontAwesome -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"/>
+  <!-- Estilos do projeto -->
+  <link rel="stylesheet" href="style.css"/>
+</head>
+<body class="bg-gray-100 font-sans">
+  <!-- App Container -->
+  <div id="app" class="max-w-md mx-auto bg-white min-h-screen relative overflow-hidden">
+
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="fixed inset-0 bg-purple-600 flex flex-col items-center justify-center z-50">
+      <div class="text-white text-center">
+        <div class="text-5xl mb-4 font-bold">Pulse</div>
+        <div class="text-xl">Conectando pessoas reais</div>
+      </div>
+      <div class="absolute bottom-10 w-full px-8">
+        <div class="h-1 bg-white/30 rounded-full overflow-hidden">
+          <div id="loading-bar" class="h-full bg-white rounded-full w-0"></div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Telas de Autenticação -->
+    <div id="auth-screens" class="hidden fixed inset-0 bg-white z-40 overflow-y-auto">
+      <!-- Login -->
+      <div id="login-screen" class="p-6 pt-12">
+        <div class="text-center mb-10">
+          <div class="text-4xl font-bold text-purple-600 mb-2">Pulse</div>
+          <p class="text-gray-600">Conecte-se com pessoas próximas</p>
+        </div>
+        <div class="space-y-4">
+          <button onclick="UI.showRegister()" class="w-full bg-purple-600 text-white py-3 rounded-full font-medium">
+            Criar conta
+          </button>
+
+          <button onclick="Auth.quickLogin('google')" class="w-full bg-gray-200 text-gray-800 py-3 rounded-full font-medium flex items-center justify-center space-x-2">
+            <i class="fab fa-google text-red-500"></i><span>Continuar com Google</span>
+          </button>
+
+          <button onclick="Auth.quickLogin('facebook')" class="w-full bg-gray-200 text-gray-800 py-3 rounded-full font-medium flex items-center justify-center space-x-2">
+            <i class="fab fa-facebook text-blue-600"></i><span>Continuar com Facebook</span>
+          </button>
+
+          <button onclick="Auth.quickLogin('apple')" class="w-full bg-gray-200 text-gray-800 py-3 rounded-full font-medium flex items-center justify-center space-x-2">
+            <i class="fab fa-apple text-gray-900"></i><span>Continuar com Apple</span>
+          </button>
+
+          <div class="text-center mt-6">
+            <button onclick="UI.showLoginEmail()" class="text-purple-600 font-medium">
+              Já tem uma conta? Faça login
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Login com Email -->
+      <div id="login-email-screen" class="hidden p-6">
+        <button onclick="UI.showLoginHome()" class="mb-6">
+          <i class="fas fa-arrow-left text-gray-600 text-xl"></i>
+        </button>
+        <h2 class="text-2xl font-bold mb-6">Faça login</h2>
+        <div class="space-y-4">
+          <div>
+            <label class="block text-gray-700 mb-1">E-mail</label>
+            <input type="email" id="loginEmail" class="w-full p-3 border border-gray-300 rounded-lg" />
+          </div>
+          <div>
+            <label class="block text-gray-700 mb-1">Senha</label>
+            <input type="password" id="loginPassword" class="w-full p-3 border border-gray-300 rounded-lg" />
+          </div>
+          <button onclick="Auth.login()" class="w-full bg-purple-600 text-white py-3 rounded-full font-medium mt-4">
+            Entrar
+          </button>
+        </div>
+      </div>
+
+      <!-- Cadastro -->
+      <div id="register-screen" class="hidden p-6">
+        <button onclick="UI.showLoginHome()" class="mb-6">
+          <i class="fas fa-arrow-left text-gray-600 text-xl"></i>
+        </button>
+        <h2 class="text-2xl font-bold mb-6">Crie sua conta</h2>
+        <div class="space-y-4">
+          <input type="text" id="regName" placeholder="Nome" class="w-full p-3 border border-gray-300 rounded-lg" />
+          <input type="email" id="regEmail" placeholder="E-mail" class="w-full p-3 border border-gray-300 rounded-lg" />
+          <input type="password" id="regPassword" placeholder="Senha" class="w-full p-3 border border-gray-300 rounded-lg" />
+          <input type="date" id="regBirth" class="w-full p-3 border border-gray-300 rounded-lg" />
+
+          <!-- Status -->
+          <div class="pt-2">
+            <label class="block text-gray-700 mb-3">Status</label>
+            <div class="flex flex-wrap gap-2">
+              <button class="status-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Solteiro">Solteiro</button>
+              <button class="status-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Amizade">Amizade</button>
+              <button class="status-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Namoro">Namoro</button>
+              <button class="status-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Networking">Networking</button>
+            </div>
+          </div>
+
+          <!-- Foto (mock) -->
+          <div class="pt-4">
+            <label class="block text-gray-700 mb-3">Foto de perfil</label>
+            <div class="w-24 h-24 rounded-full bg-gray-200 flex items-center justify-center overflow-hidden border-2 border-dashed border-gray-300">
+              <i class="fas fa-camera text-gray-400 text-xl"></i>
+            </div>
+          </div>
+
+          <button onclick="Auth.register()" class="w-full bg-purple-600 text-white py-3 rounded-full font-medium mt-6">
+            Criar conta
+          </button>
+        </div>
+      </div>
+    </div>
+
+    <!-- Check-in -->
+    <div id="checkin-screen" class="hidden p-6">
+      <div class="text-center mb-8">
+        <h2 class="text-2xl font-bold mb-2">Onde você está?</h2>
+        <p class="text-gray-600">Escolha seu local para encontrar pessoas próximas</p>
+      </div>
+
+      <div class="mb-4 relative">
+        <i class="fas fa-search absolute left-3 top-3 text-gray-400"></i>
+        <input id="searchPlace" type="text" placeholder="Buscar locais..." class="w-full pl-10 p-3 border border-gray-300 rounded-lg"/>
+      </div>
+
+      <div id="placesList" class="space-y-3">
+        <!-- Cards de locais -->
+      </div>
+
+      <div class="fixed bottom-6 left-0 right-0 px-6">
+        <button onclick="Location.confirmCheckin()" class="w-full bg-purple-600 text-white py-3 rounded-full font-medium shadow-lg">
+          Confirmar Check-in
+        </button>
+        <button onclick="Location.leaveCheckin(true)" class="w-full mt-2 bg-gray-200 text-gray-700 py-3 rounded-full font-medium shadow-lg">
+          Sair do local
+        </button>
+      </div>
+    </div>
+
+    <!-- App Principal -->
+    <div id="main-app" class="hidden h-full">
+      <!-- Header do local -->
+      <div class="p-4 flex justify-between items-center border-b border-gray-200">
+        <div class="flex items-center">
+          <div class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center text-white font-bold">P</div>
+          <div class="ml-2">
+            <div id="headerPlace" class="font-medium">-</div>
+            <div class="text-xs text-gray-500">
+              Online agora • <span id="checkinCountdown">--:--</span>
+            </div>
+          </div>
+        </div>
+        <div class="flex items-center space-x-4">
+          <button onclick="UI.showFilters()"><i class="fas fa-sliders-h text-gray-600 text-xl"></i></button>
+          <button onclick="UI.showProfile()"><i class="fas fa-user text-gray-600 text-xl"></i></button>
+          <button onclick="UI.showLikesInbox()" class="relative">
+            <i class="fas fa-bell text-gray-600 text-xl"></i>
+            <span id="likesBadge" class="hidden absolute -top-2 -right-2 text-xs bg-red-500 text-white rounded-full px-1.5 py-0.5">0</span>
+          </button>
+        </div>
+      </div>
+
+      <!-- Área de Swipe -->
+      <div id="swipe-screen" class="h-full flex flex-col">
+        <div id="cards-container" class="flex-1 relative overflow-hidden">
+          <!-- Cartões de perfis gerados via JS -->
+        </div>
+
+        <!-- Botões -->
+        <div class="p-6 flex justify-center space-x-6">
+          <button onclick="Swipe.dislike()" class="w-14 h-14 rounded-full bg-white border border-gray-300 flex items-center justify-center shadow-md">
+            <i class="fas fa-times text-red-500 text-2xl"></i>
+          </button>
+          <button onclick="UI.showPromo()" class="w-14 h-14 rounded-full bg-white border border-gray-300 flex items-center justify-center shadow-md">
+            <i class="fas fa-gift text-yellow-500 text-2xl"></i>
+          </button>
+          <button onclick="Swipe.like()" class="w-14 h-14 rounded-full bg-white border border-gray-300 flex items-center justify-center shadow-md">
+            <i class="fas fa-heart text-green-500 text-2xl"></i>
+          </button>
+        </div>
+      </div>
+
+      <!-- Match Overlay -->
+      <div id="match-screen" class="hidden absolute inset-0 bg-black bg-opacity-80 z-30 flex flex-col items-center justify-center p-6">
+        <div class="text-center text-white">
+          <div class="text-4xl font-bold mb-4 match-animation">Deu Match!</div>
+          <p id="matchText" class="text-xl mb-8">Vocês curtiram um ao outro!</p>
+
+          <div class="flex justify-center -space-x-4 mb-8">
+            <div class="w-24 h-24 rounded-full bg-purple-200 overflow-hidden border-4 border-white">
+              <img id="matchUserA" src="https://randomuser.me/api/portraits/men/32.jpg" class="w-full h-full object-cover" />
+            </div>
+            <div class="w-24 h-24 rounded-full bg-purple-200 overflow-hidden border-4 border-white">
+              <img id="matchUserB" src="https://randomuser.me/api/portraits/women/44.jpg" class="w-full h-full object-cover" />
+            </div>
+          </div>
+
+          <div class="space-y-3">
+            <button onclick="Chat.openFromMatch()" class="w-full bg-white text-purple-600 py-3 rounded-full font-bold">
+              Abrir Chat
+            </button>
+            <button onclick="UI.continueSwiping()" class="w-full bg-transparent border border-white text-white py-3 rounded-full font-medium">
+              Continuar vendo pessoas
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Chat -->
+      <div id="chat-screen" class="hidden absolute inset-0 bg-white z-30 flex flex-col">
+        <div class="p-4 flex items-center border-b border-gray-200">
+          <button onclick="Chat.close()" class="mr-2"><i class="fas fa-arrow-left text-gray-600"></i></button>
+          <div class="w-10 h-10 rounded-full bg-purple-200 overflow-hidden mr-3">
+            <img id="chatAvatar" src="https://randomuser.me/api/portraits/women/44.jpg" class="w-full h-full object-cover" />
+          </div>
+          <div>
+            <div id="chatName" class="font-medium">-</div>
+            <div class="text-xs text-gray-500">Online agora</div>
+          </div>
+          <div class="ml-auto">
+            <button onclick="UI.showMatchOptions()"><i class="fas fa-ellipsis-v text-gray-600"></i></button>
+          </div>
+        </div>
+
+        <!-- Mensagens -->
+        <div id="messages-container" class="flex-1 p-4 overflow-y-auto space-y-3"></div>
+
+        <!-- Quick replies -->
+        <div id="quickReplies" class="px-3 py-2 border-t border-gray-100 flex gap-2 overflow-x-auto">
+          <!-- Atalhos gerados via JS -->
+        </div>
+
+        <!-- Input -->
+        <div class="p-3 border-t border-gray-200">
+          <div class="flex items-center">
+            <button class="w-10 h-10 rounded-full bg-gray-100 flex items-center justify-center mr-2">
+              <i class="fas fa-plus text-gray-600"></i>
+            </button>
+            <input id="messageInput" type="text" placeholder="Digite uma mensagem..." class="flex-1 border border-gray-300 rounded-full py-2 px-4" />
+            <button onclick="Chat.send()" class="w-10 h-10 rounded-full bg-purple-600 flex items-center justify-center ml-2">
+              <i class="fas fa-paper-plane text-white"></i>
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Filtros -->
+      <div id="filters-screen" class="hidden absolute inset-0 bg-white z-30 overflow-y-auto p-6">
+        <div class="flex justify-between items-center mb-6">
+          <button onclick="UI.hideFilters()"><i class="fas fa-arrow-left text-gray-600"></i></button>
+          <h2 class="text-xl font-bold">Filtros</h2>
+          <div class="w-6"></div>
+        </div>
+
+        <div class="space-y-6">
+          <div>
+            <h3 class="font-medium mb-3">Idade</h3>
+            <div class="flex items-center justify-between">
+              <input id="ageMin" type="number" value="18" class="w-16 p-2 border border-gray-300 rounded-lg text-center" />
+              <span class="mx-2">a</span>
+              <input id="ageMax" type="number" value="30" class="w-16 p-2 border border-gray-300 rounded-lg text-center" />
+            </div>
+          </div>
+
+          <div>
+            <h3 class="font-medium mb-3">Distância máxima</h3>
+            <select id="distMax" class="w-full p-3 border border-gray-300 rounded-lg">
+              <option>1 km</option>
+              <option selected>5 km</option>
+              <option>10 km</option>
+              <option>20 km</option>
+            </select>
+          </div>
+
+          <div>
+            <h3 class="font-medium mb-3">Interesses</h3>
+            <div id="interests" class="flex flex-wrap gap-2">
+              <button class="tag-btn px-4 py-2 bg-purple-600 text-white rounded-full text-sm" data-interest="Música">Música</button>
+              <button class="tag-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-interest="Esportes">Esportes</button>
+              <button class="tag-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-interest="Viagens">Viagens</button>
+              <button class="tag-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-interest="Comida">Comida</button>
+              <button class="tag-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-interest="Filmes">Filmes</button>
+              <button class="tag-btn px-4 py-2 bg-gray-200 rounded-full text-sm" data-interest="Tecnologia">Tecnologia</button>
+            </div>
+          </div>
+
+          <div>
+            <h3 class="font-medium mb-3">Status</h3>
+            <div id="statusFilter" class="flex flex-wrap gap-2">
+              <button class="px-4 py-2 bg-purple-600 text-white rounded-full text-sm" data-status="Solteiro">Solteiro</button>
+              <button class="px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Amizade">Amizade</button>
+              <button class="px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Namoro">Namoro</button>
+              <button class="px-4 py-2 bg-gray-200 rounded-full text-sm" data-status="Networking">Networking</button>
+            </div>
+          </div>
+
+          <div class="pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <h3 class="font-medium">Modo discreto</h3>
+              <label class="relative inline-flex items-center cursor-pointer">
+                <input id="stealthMode" type="checkbox" class="sr-only peer">
+                <div class="w-11 h-6 bg-gray-200 rounded-full peer peer-checked:bg-purple-600 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+              </label>
+            </div>
+            <p class="text-sm text-gray-500">Só apareça para quem também te curtiu</p>
+          </div>
+
+          <button onclick="Filters.apply()" class="w-full bg-purple-600 text-white py-3 rounded-full font-medium mt-8">
+            Aplicar Filtros
+          </button>
+        </div>
+      </div>
+
+      <!-- Perfil -->
+      <div id="profile-screen" class="hidden absolute inset-0 bg-white z-30 overflow-y-auto">
+        <div class="relative">
+          <div class="h-64 bg-gradient-to-r from-purple-500 to-pink-500"></div>
+          <button onclick="UI.hideProfile()" class="absolute top-4 left-4 bg-black bg-opacity-50 text-white w-10 h-10 rounded-full flex items-center justify-center">
+            <i class="fas fa-arrow-left"></i>
+          </button>
+        </div>
+
+        <div class="px-6 pb-6">
+          <div class="flex justify-between items-start -mt-12 mb-4">
+            <div class="w-24 h-24 rounded-full border-4 border-white bg-white overflow-hidden">
+              <img id="profileAvatar" src="https://randomuser.me/api/portraits/men/32.jpg" class="w-full h-full object-cover"/>
+            </div>
+            <button onclick="UI.showSettings()" class="bg-white p-2 rounded-full shadow-md">
+              <i class="fas fa-cog text-gray-600"></i>
+            </button>
+          </div>
+
+          <div class="mb-6">
+            <h2 id="profileName" class="text-2xl font-bold">Seu Nome</h2>
+            <p id="profileMeta" class="text-gray-600">Idade • Status</p>
+          </div>
+
+          <div class="mb-6">
+            <h3 class="font-medium mb-2">Sobre mim</h3>
+            <p id="profileBio" class="text-gray-700">Adicione uma bio legal no futuro 😄</p>
+          </div>
+
+          <div class="mb-6">
+            <h3 class="font-medium mb-2">Interesses</h3>
+            <div id="profileTags" class="flex flex-wrap gap-2">
+              <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">Música</span>
+              <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">Viagens</span>
+              <span class="px-3 py-1 bg-purple-100 text-purple-800 rounded-full text-sm">Fotografia</span>
+            </div>
+          </div>
+
+          <div class="mb-6">
+            <h3 class="font-medium mb-2">Local atual</h3>
+            <div class="flex items-center">
+              <i class="fas fa-map-marker-alt text-purple-600 mr-2"></i>
+              <span id="profilePlace">—</span>
+            </div>
+          </div>
+
+          <button onclick="UI.showSettings()" class="w-full border border-purple-600 text-purple-600 py-3 rounded-full font-medium">
+            Editar Perfil
+          </button>
+        </div>
+      </div>
+
+      <!-- Promoções -->
+      <div id="promo-screen" class="hidden absolute inset-0 bg-white z-30 p-6">
+        <div class="flex justify-between items-center mb-6">
+          <button onclick="UI.hidePromo()"><i class="fas fa-arrow-left text-gray-600"></i></button>
+          <h2 class="text-xl font-bold">Promoções</h2>
+          <div class="w-6"></div>
+        </div>
+
+        <div class="bg-gradient-to-r from-yellow-400 to-yellow-500 rounded-xl p-6 text-white mb-6">
+          <div class="font-bold text-lg mb-2">Hoje no Barzinho do João</div>
+          <p class="mb-4">Todas as pessoas que derem match hoje ganham 1 dose grátis!</p>
+          <div class="text-xs">Válido até 23:59 • Mostre esta mensagem no balcão</div>
+        </div>
+
+        <div class="bg-gradient-to-r from-purple-500 to-pink-500 rounded-xl p-6 text-white">
+          <div class="font-bold text-lg mb-2">Happy Hour Especial</div>
+          <p class="mb-4">Das 18h às 20h, todas as bebidas com 30% de desconto para usuários do Pulse!</p>
+          <div class="text-xs">Válido até sexta-feira</div>
+        </div>
+      </div>
+
+      <!-- Inbox de Curtidas (simulada, não revela quem) -->
+      <div id="likes-inbox" class="hidden absolute inset-0 bg-white z-30 p-6">
+        <div class="flex justify-between items-center mb-6">
+          <button onclick="UI.hideLikesInbox()"><i class="fas fa-arrow-left text-gray-600"></i></button>
+          <h2 class="text-xl font-bold">Notificações</h2>
+          <div class="w-6"></div>
+        </div>
+        <p class="text-gray-700">Alguém te curtiu! Continue dando likes para descobrir quem é quando der match 😉</p>
+      </div>
+    </div>
+  </div>
+
+  <!-- Lógica do App -->
+  <script src="app.js"></script>
+</body>
+</html>
