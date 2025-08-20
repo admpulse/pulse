@@ -1,366 +1,458 @@
 /**********************************************************
- * PULSE — MVP Front-end (protótipo navegável)
- * Melhorias:
- *  - Swipe por arrasto (touch/mouse)
- *  - Distância simulada dinamicamente
- *  - Matches/chats persistidos por local
+ * PULSE — App Front-end + Firebase (Auth, Firestore)
+ * Fluxos: Login/Cadastro, Check-in, Swipe, Match, Chat
+ * Requer: index.html com window._fb exposto (já OK)
  **********************************************************/
 
-/* ---------------------------- Estado & Mock DB ---------------------------- */
+/* ---------------------------- Atalhos Firebase ---------------------------- */
+const FB = window._fb;
+const {
+  auth, db, storage,
+  onAuthStateChanged, signInWithEmailAndPassword, createUserWithEmailAndPassword,
+  GoogleAuthProvider, FacebookAuthProvider, signInWithPopup, signOut, updateProfile,
+  doc, setDoc, getDoc, collection, addDoc, query, where, getDocs, serverTimestamp,
+  ref, uploadBytes, getDownloadURL
+} = FB;
 
-const DB = {
-  profiles: [
-    { id: 1,  name: "Ana",      age: 24, photo: "https://randomuser.me/api/portraits/women/33.jpg", bio: "Amo dançar e conhecer pessoas novas",       interests: ["Música","Viagens"],     status: "Solteiro", likedYou: true  },
-    { id: 2,  name: "Carlos",   age: 28, photo: "https://randomuser.me/api/portraits/men/22.jpg",   bio: "Programador e cervejeiro nas horas vagas",   interests: ["Tecnologia","Comida"], status: "Amizade",  likedYou: false },
-    { id: 3,  name: "Mariana",  age: 26, photo: "https://randomuser.me/api/portraits/women/44.jpg", bio: "Sempre pronta para uma boa conversa",        interests: ["Filmes","Música"],     status: "Namoro",   likedYou: true  },
-    { id: 4,  name: "Pedro",    age: 30, photo: "https://randomuser.me/api/portraits/men/45.jpg",   bio: "Músico e apaixonado por viagens",            interests: ["Música","Viagens"],    status: "Networking", likedYou: false },
-    { id: 5,  name: "Juliana",  age: 27, photo: "https://randomuser.me/api/portraits/women/55.jpg", bio: "Fotógrafa e exploradora de bares",            interests: ["Fotografia","Comida"], status: "Solteiro", likedYou: false },
-    { id: 6,  name: "Rafa",     age: 25, photo: "https://randomuser.me/api/portraits/men/11.jpg",   bio: "Viciado em filmes e boas conversas",         interests: ["Filmes","Comida"],     status: "Solteiro", likedYou: true  },
-  ],
-  places: [
-    { name: "Barzinho do João", icon: "fa-glass-martini-alt", color: "text-purple-600", bg: "bg-purple-100", distance: "300m" },
-    { name: "Boate X",          icon: "fa-music",             color: "text-blue-600",   bg: "bg-blue-100",    distance: "450m" },
-    { name: "Praça Central",    icon: "fa-tree",              color: "text-green-600",  bg: "bg-green-100",   distance: "600m" },
-    { name: "Cafeteria Aconchego", icon: "fa-coffee",         color: "text-yellow-600", bg: "bg-yellow-100",  distance: "750m" },
-  ],
-};
-
+/* ---------------------------- Estado Global ---------------------------- */
 const State = {
-  user: null,
+  user: null,              // doc em /users/{uid}
   isLoggedIn: false,
-  checkin: null,              // { place, startedAt, expiresAt }
-  checkinTimer: null,
-  currentCards: [],
-  currentCardIndex: 0,
-  likesGiven: {},
-  matches: {},                // { place: { profileId: { chat: [] } } }
-  likesInboxCount: 0,
-  filters: {
-    ageMin: 18,
-    ageMax: 30,
-    interests: new Set(["Música"]),
-    status: "Solteiro",
-    maxKm: 5,
-    stealth: false,
-  },
-  chatOpenWith: null,
-};
-
-/* ---------------------------- Persistência ---------------------------- */
-
-const Storage = {
-  save() {
-    localStorage.setItem("pulse_state", JSON.stringify(State));
-  },
-  load() {
-    const raw = localStorage.getItem("pulse_state");
-    if (!raw) return;
-    try {
-      const data = JSON.parse(raw);
-      Object.assign(State, data);
-      // retransforma Set
-      if (data.filters?.interests) {
-        State.filters.interests = new Set(data.filters.interests);
-      }
-    } catch(e) {
-      console.warn("Erro ao carregar storage:", e);
-    }
-  },
-  clearCheckinOnly() {
-    State.checkin = null;
-    if (State.checkinTimer) clearInterval(State.checkinTimer);
-    State.checkinTimer = null;
-    Storage.save();
+  currentPlace: null,      // string do select
+  cards: [],               // perfis renderizados (outros usuários no mesmo local)
+  cardIndex: 0,
+  likesGiven: {},          // cache local para não repetir
+  lastMatch: null,         // { matchId, profile }
+  chat: {
+    matchId: null,
+    other: null,           // { uid, name, photo }
+    unsubMessages: null
   }
 };
 
-/* ---------------------------- Utils ---------------------------- */
-
+/* ---------------------------- Utilidades ---------------------------- */
 const $ = (sel) => document.querySelector(sel);
 const $$ = (sel) => document.querySelectorAll(sel);
 
-function formatCountdown(ms) {
-  if (ms <= 0) return "00:00";
-  const totalSec = Math.floor(ms / 1000);
-  const m = String(Math.floor(totalSec / 60)).padStart(2, "0");
-  const s = String(totalSec % 60).padStart(2, "0");
-  return `${m}:${s}`;
+function show(el) { el.classList.remove("hidden"); }
+function hide(el) { el.classList.add("hidden"); }
+
+function screenOnly(id) {
+  $$(".screen").forEach(s => hide(s));
+  show($(id));
 }
 
-/* ---------------------------- UI ---------------------------- */
+function nameFromEmail(email) {
+  if (!email) return "Usuário";
+  return email.split("@")[0]?.replace(/\W+/g, " ").trim() || "Usuário";
+}
 
-const UI = {
-  boot() {
-    setTimeout(() => {
-      $("#loading-bar").style.width = "100%";
-      setTimeout(() => {
-        $("#loading-screen").classList.add("hidden");
-        if (State.isLoggedIn) {
-          if (Location.isCheckinValid()) Location.enterAppFromCheckin();
-          else UI.showCheckin();
-        } else {
-          UI.showAuth();
-        }
-      }, 500);
-    }, 1200);
-  },
-  showAuth() {
-    $("#auth-screens").classList.remove("hidden");
-    $("#login-screen").classList.remove("hidden");
-    $("#login-email-screen").classList.add("hidden");
-    $("#register-screen").classList.add("hidden");
-  },
-  showLoginEmail() {
-    $("#login-screen").classList.add("hidden");
-    $("#login-email-screen").classList.remove("hidden");
-  },
-  showRegister() {
-    $("#login-screen").classList.add("hidden");
-    $("#register-screen").classList.remove("hidden");
-  },
-  showLoginHome() {
-    $("#register-screen").classList.add("hidden");
-    $("#login-email-screen").classList.add("hidden");
-    $("#login-screen").classList.remove("hidden");
-  },
-  showCheckin() {
-    $("#auth-screens").classList.add("hidden");
-    $("#checkin-screen").classList.remove("hidden");
-    Location.renderPlaces();
-  },
-  hideCheckin() { $("#checkin-screen").classList.add("hidden"); },
-  enterMainApp() {
-    $("#main-app").classList.remove("hidden");
-    $("#headerPlace").textContent = State.checkin?.place || "-";
-    $("#profilePlace").textContent = State.checkin?.place || "—";
-    Swipe.reloadCards();
-    Location.startCountdown();
-  },
-  showFilters() { $("#filters-screen").classList.remove("hidden"); },
-  hideFilters() { $("#filters-screen").classList.add("hidden"); },
-  showProfile() { $("#profile-screen").classList.remove("hidden"); },
-  hideProfile() { $("#profile-screen").classList.add("hidden"); },
-  showPromo() { $("#promo-screen").classList.remove("hidden"); },
-  hidePromo() { $("#promo-screen").classList.add("hidden"); },
-  continueSwiping() { $("#match-screen").classList.add("hidden"); },
-  updateLikesBadge() {
-    const badge = $("#likesBadge");
-    if (State.likesInboxCount > 0) {
-      badge.textContent = State.likesInboxCount;
-      badge.classList.remove("hidden");
-    } else {
-      badge.classList.add("hidden");
+/* ---------------------------- Perfil (Firestore) ---------------------------- */
+const Profile = {
+  async ensureUserDoc(firebaseUser) {
+    const uid = firebaseUser.uid;
+    const snap = await getDoc(doc(db, "users", uid));
+    if (!snap.exists()) {
+      const displayName = firebaseUser.displayName || nameFromEmail(firebaseUser.email);
+      const photoURL = firebaseUser.photoURL || "";
+      await setDoc(doc(db, "users", uid), {
+        uid,
+        name: displayName,
+        email: firebaseUser.email || null,
+        photoURL,
+        age: 25,
+        status: "Solteiro",
+        currentPlace: null,
+        createdAt: serverTimestamp()
+      });
     }
+  },
+  async loadMe() {
+    const u = auth.currentUser;
+    if (!u) return null;
+    const d = await getDoc(doc(db, "users", u.uid));
+    return d.exists() ? d.data() : null;
+  },
+  async setPlace(place) {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    await setDoc(doc(db, "users", uid), { currentPlace: place }, { merge: true });
+  },
+  async clearPlace() {
+    const uid = auth.currentUser?.uid;
+    if (!uid) return;
+    await setDoc(doc(db, "users", uid), { currentPlace: null }, { merge: true });
   }
 };
 
-/* ---------------------------- Auth ---------------------------- */
+/* ---------------------------- Pessoas por local ---------------------------- */
+const People = {
+  async fetchNearby(place) {
+    // Lista usuários no mesmo lugar (exceto eu)
+    const qs = query(collection(db, "users"), where("currentPlace", "==", place));
+    const snap = await getDocs(qs);
+    const arr = [];
+    snap.forEach(d => {
+      const val = d.data();
+      if (val.uid !== auth.currentUser?.uid) {
+        val.distanceKm = (Math.random() * 2).toFixed(2);
+        arr.push({
+          id: val.uid,
+          name: val.name || "Usuário",
+          age: val.age || 25,
+          photo: val.photoURL || "https://placehold.co/300x300",
+          bio: "Disponível no local",
+          interests: ["Música"],
+          status: val.status || "Solteiro",
+          distanceKm: val.distanceKm
+        });
+      }
+    });
+    arr.sort((a, b) => a.distanceKm - b.distanceKm);
+    return arr;
+  }
+};
 
-const Auth = {
-  quickLogin(provider) {
-    State.user = { id: 999, name: "João Silva", age: 25, status: "Solteiro", photo: "https://randomuser.me/api/portraits/men/32.jpg" };
-    State.isLoggedIn = true;
-    Storage.save();
-    UI.showCheckin();
+/* ---------------------------- Swipes / Matches / Chat ---------------------------- */
+const Swipes = {
+  async like(toUid, place) {
+    await addDoc(collection(db, "swipes"), {
+      fromUid: auth.currentUser.uid,
+      toUid,
+      place: place || null,
+      action: "like",
+      createdAt: serverTimestamp()
+    });
   },
-  login() {
-    State.user = { id: 999, name: "João Silva", age: 25, status: "Solteiro", photo: "https://randomuser.me/api/portraits/men/32.jpg" };
-    State.isLoggedIn = true;
-    Storage.save();
-    UI.showCheckin();
+  async dislike(toUid, place) {
+    await addDoc(collection(db, "swipes"), {
+      fromUid: auth.currentUser.uid,
+      toUid,
+      place: place || null,
+      action: "dislike",
+      createdAt: serverTimestamp()
+    });
   },
-  register() {
-    State.user = { id: 999, name: "Usuário", age: 25, status: "Solteiro", photo: "https://randomuser.me/api/portraits/men/32.jpg" };
-    State.isLoggedIn = true;
-    Storage.save();
-    UI.showCheckin();
+  async isMutual(toUid) {
+    // verifica se o outro já deu like em mim
+    const q1 = query(
+      collection(db, "swipes"),
+      where("fromUid", "==", toUid),
+      where("toUid", "==", auth.currentUser.uid),
+      where("action", "==", "like")
+    );
+    const snap = await getDocs(q1);
+    return !snap.empty;
+  }
+};
+
+const Matches = {
+  buildId(otherUid, place) {
+    const a = auth.currentUser.uid;
+    const b = otherUid;
+    const [x, y] = a < b ? [a, b] : [b, a];
+    return `${x}_${y}_${place || "global"}`;
+  },
+  async createIfMutual(otherUid, place) {
+    const mutual = await Swipes.isMutual(otherUid);
+    if (!mutual) return null;
+    const matchId = this.buildId(otherUid, place);
+    const mRef = doc(db, "matches", matchId);
+    const existing = await getDoc(mRef);
+    if (!existing.exists()) {
+      await setDoc(mRef, {
+        id: matchId,
+        uids: [auth.currentUser.uid, otherUid],
+        place: place || null,
+        createdAt: serverTimestamp()
+      });
+    }
+    return matchId;
+  }
+};
+
+const Chat = {
+  async openFor(otherProfile) {
+    // Descobre matchId determinístico
+    const matchId = Matches.buildId(otherProfile.id, State.currentPlace || "global");
+    State.chat.matchId = matchId;
+    State.chat.other = { uid: otherProfile.id, name: otherProfile.name, photo: otherProfile.photo };
+
+    // Navega para tela de chat
+    screenOnly("#chat-screen");
+    $("#chat-messages").innerHTML = "";
+
+    // Liga listener em tempo real para mensagens
+    if (State.chat.unsubMessages) {
+      State.chat.unsubMessages();
+      State.chat.unsubMessages = null;
+    }
+    const { onSnapshot, orderBy, limit } = await import("https://www.gstatic.com/firebasejs/12.1.0/firebase-firestore.js");
+    const msgsRef = collection(db, "matches", matchId, "messages");
+    const qMsgs = query(msgsRef, orderBy("ts", "asc"), limit(200));
+
+    State.chat.unsubMessages = onSnapshot(qMsgs, (snap) => {
+      const msgs = [];
+      snap.forEach(d => msgs.push(d.data()));
+      Chat.render(msgs);
+    });
+  },
+  async send(text) {
+    if (!text.trim()) return;
+    await addDoc(collection(db, "matches", State.chat.matchId, "messages"), {
+      from: auth.currentUser.uid,
+      text: text.trim(),
+      ts: serverTimestamp()
+    });
+    $("#chat-input").value = "";
+  },
+  close() {
+    if (State.chat.unsubMessages) {
+      State.chat.unsubMessages();
+      State.chat.unsubMessages = null;
+    }
+    State.chat.matchId = null;
+    State.chat.other = null;
+    // volta para swipes
+    screenOnly("#swipe-screen");
+  },
+  render(messages) {
+    const box = $("#chat-messages");
+    box.innerHTML = "";
+    messages.forEach(m => {
+      const mine = m.from === auth.currentUser.uid;
+      const div = document.createElement("div");
+      div.className = `msg ${mine ? "me" : "them"}`;
+      div.innerHTML = `
+        <div class="bubble ${mine ? "me" : "them"}">
+          <p>${escapeHtml(m.text || "")}</p>
+        </div>
+      `;
+      box.appendChild(div);
+    });
+    box.scrollTop = box.scrollHeight;
+  }
+};
+
+/* ---------------------------- Swipe UI ---------------------------- */
+const Swipe = {
+  async reloadCards() {
+    const container = $("#cards-container");
+    container.innerHTML = "<p style='padding:16px;text-align:center;'>Carregando...</p>";
+    if (!State.currentPlace) {
+      container.innerHTML = "<p style='padding:16px;text-align:center;'>Faça check-in para ver pessoas.</p>";
+      return;
+    }
+    const list = await People.fetchNearby(State.currentPlace);
+    State.cards = list;
+    State.cardIndex = 0;
+    if (!list.length) {
+      container.innerHTML = "<p style='padding:16px;text-align:center;'>Ninguém por aqui agora.</p>";
+      return;
+    }
+    container.innerHTML = "";
+    list.forEach((p, idx) => {
+      const card = document.createElement("div");
+      card.className = `card ${idx === 0 ? "top" : "hidden"}`;
+      card.dataset.uid = p.id;
+      card.innerHTML = `
+        <div class="photo" style="background-image:url('${p.photo}')"></div>
+        <div class="info">
+          <h3>${p.name}, ${p.age}</h3>
+          <p>${p.bio}</p>
+          <small>${p.distanceKm} km • ${p.status}</small>
+        </div>
+      `;
+      this._attachDrag(card, p);
+      container.appendChild(card);
+    });
+  },
+  current() {
+    return State.cards[State.cardIndex] || null;
+  },
+  _advance() {
+    const cards = $$("#cards-container .card");
+    if (cards[State.cardIndex]) cards[State.cardIndex].remove();
+    State.cardIndex++;
+    const next = cards[State.cardIndex];
+    if (next) next.classList.remove("hidden");
+  },
+  async like() {
+    const p = this.current(); if (!p) return;
+    State.likesGiven[p.id] = "like";
+    await Swipes.like(p.id, State.currentPlace);
+    const matchId = await Matches.createIfMutual(p.id, State.currentPlace);
+    if (matchId) {
+      State.lastMatch = { matchId, profile: p };
+      // Atualiza UI de match
+      $("#matchUserA").src = State.user?.photoURL || "https://placehold.co/120x120";
+      $("#matchUserB").src = p.photo;
+      $("#matchText").textContent = `Você e ${p.name} curtiram um ao outro!`;
+      screenOnly("#match-screen");
+    } else {
+      this._advance();
+    }
+  },
+  async dislike() {
+    const p = this.current(); if (!p) return;
+    State.likesGiven[p.id] = "dislike";
+    await Swipes.dislike(p.id, State.currentPlace);
+    this._advance();
+  },
+  _attachDrag(card, profile) {
+    let startX = 0, deltaX = 0, dragging = false;
+
+    const move = (x) => {
+      if (!dragging) return;
+      deltaX = x - startX;
+      card.style.transform = `translateX(${deltaX}px) rotate(${deltaX / 20}deg)`;
+      card.style.transition = "none";
+    };
+    const end = async () => {
+      if (!dragging) return;
+      dragging = false;
+      card.style.transition = "transform .2s ease";
+      if (deltaX > 100) {
+        card.style.transform = "translateX(300px) rotate(15deg)";
+        await this.like();
+      } else if (deltaX < -100) {
+        card.style.transform = "translateX(-300px) rotate(-15deg)";
+        await this.dislike();
+      } else {
+        card.style.transform = "translateX(0) rotate(0)";
+      }
+    };
+
+    card.addEventListener("mousedown", (e) => { dragging = true; startX = e.clientX; });
+    card.addEventListener("mousemove", (e) => move(e.clientX));
+    card.addEventListener("mouseup", end);
+    card.addEventListener("mouseleave", end);
+
+    card.addEventListener("touchstart", (e) => { dragging = true; startX = e.touches[0].clientX; });
+    card.addEventListener("touchmove", (e) => move(e.touches[0].clientX));
+    card.addEventListener("touchend", end);
+  }
+};
+
+/* ---------------------------- Autenticação (UI) ---------------------------- */
+const AuthUI = {
+  async loginEmail() {
+    const email = $("#auth-email").value.trim();
+    const pass = $("#auth-password").value.trim();
+    if (!email || !pass) return alert("Preencha email e senha.");
+    const cred = await signInWithEmailAndPassword(auth, email, pass);
+    await Profile.ensureUserDoc(cred.user);
+  },
+  async registerEmail() {
+    const email = $("#auth-email").value.trim();
+    const pass = $("#auth-password").value.trim();
+    if (!email || !pass) return alert("Informe email e senha para cadastrar.");
+    const cred = await createUserWithEmailAndPassword(auth, email, pass);
+    // define displayName básico
+    await updateProfile(cred.user, { displayName: nameFromEmail(email) });
+    await Profile.ensureUserDoc(cred.user);
+    alert("Conta criada! Você já está logado.");
+  },
+  async loginGoogle() {
+    const provider = new GoogleAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    await Profile.ensureUserDoc(cred.user);
+  },
+  async loginFacebook() {
+    const provider = new FacebookAuthProvider();
+    const cred = await signInWithPopup(auth, provider);
+    await Profile.ensureUserDoc(cred.user);
+  },
+  async logout() {
+    // Ao sair, limpa presença
+    await Profile.clearPlace();
+    await signOut(auth);
   }
 };
 
 /* ---------------------------- Check-in ---------------------------- */
+async function doCheckin() {
+  const sel = $("#checkin-place");
+  const place = sel.value || null;
+  if (!place) return alert("Selecione um local.");
+  State.currentPlace = place;
+  await Profile.setPlace(place);
+  await Swipe.reloadCards();
+  screenOnly("#swipe-screen");
+}
 
-const Location = {
-  selectedPlace: null,
-  renderPlaces() {
-    const list = $("#placesList");
-    list.innerHTML = "";
-    DB.places.forEach((p, idx) => {
-      const div = document.createElement("div");
-      div.className = "location-card p-4 border border-gray-200 rounded-lg flex items-center cursor-pointer";
-      div.innerHTML = `<div class="ml-4"><h3 class="font-medium">${p.name}</h3></div>`;
-      div.addEventListener("click", () => {
-        $$(".location-card").forEach(c => c.classList.remove("border-purple-600", "bg-purple-50"));
-        div.classList.add("border-purple-600","bg-purple-50");
-        Location.selectedPlace = p.name;
-      });
-      if (idx===0) {div.classList.add("border-purple-600","bg-purple-50"); Location.selectedPlace=p.name;}
-      list.appendChild(div);
-    });
-  },
-  confirmCheckin() {
-    const place = Location.selectedPlace || DB.places[0].name;
-    const now = Date.now();
-    State.checkin = { place, startedAt: now, expiresAt: now + 2*60*60*1000 };
-    if (!State.matches[place]) State.matches[place] = {}; // init matches do local
-    Storage.save();
-    UI.hideCheckin();
-    this.enterAppFromCheckin();
-  },
-  leaveCheckin(manual=false) {
-    if (manual && !confirm("Tem certeza que deseja sair do local?")) return;
-    Storage.clearCheckinOnly();
-    UI.showCheckin();
-  },
-  isCheckinValid() { return State.checkin && Date.now()<State.checkin.expiresAt; },
-  startCountdown() {
-    const el=$("#checkinCountdown");
-    if(State.checkinTimer) clearInterval(State.checkinTimer);
-    State.checkinTimer=setInterval(()=>{
-      const rem=State.checkin.expiresAt-Date.now();
-      el.textContent=formatCountdown(rem);
-      if(rem<=0){ alert("Seu check-in expirou."); Location.leaveCheckin(); }
-    },1000);
-  },
-  enterAppFromCheckin(){ UI.enterMainApp(); }
-};
+/* ---------------------------- Navegação de telas ---------------------------- */
+function goContinueFromMatch() {
+  State.lastMatch = null;
+  screenOnly("#swipe-screen");
+}
 
-/* ---------------------------- Swipe ---------------------------- */
+function openChatFromMatch() {
+  if (!State.lastMatch) return goContinueFromMatch();
+  Chat.openFor(State.lastMatch.profile);
+}
 
-const Swipe = {
-  reloadCards() {
-    const container=$("#cards-container"); container.innerHTML="";
-    const place=State.checkin?.place; if(!place) return;
-    const {ageMin,ageMax,maxKm,interests,status}=State.filters;
-    let list=DB.profiles.map(p=>({...p}));
-    // simular distância dinâmica
-    list.forEach(p=>p.distanceKm=(Math.random()*2).toFixed(2));
-    list=list.filter(p=>p.age>=ageMin&&p.age<=ageMax);
-    list=list.filter(p=>!State.likesGiven[p.id]);
-    list=list.sort((a,b)=>a.distanceKm-b.distanceKm);
-    State.currentCards=list; State.currentCardIndex=0;
-    if(list.length===0){ container.innerHTML="<p class='p-6 text-center'>Sem perfis.</p>"; return;}
-    list.forEach((p,idx)=>{
-      const card=document.createElement("div");
-      card.className=`card absolute inset-0 w-full h-full bg-white rounded-xl overflow-hidden shadow-lg ${idx===0?"":"hidden"}`;
-      card.dataset.id=p.id;
-      card.innerHTML=`<div class="h-full relative"><img src="${p.photo}" class="w-full h-3/4 object-cover"/><div class="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black to-transparent p-4 text-white"><h3 class="text-xl font-bold">${p.name}, ${p.age}</h3><p class="text-sm">${p.bio}</p></div></div>`;
-      Swipe._addDrag(card,p);
-      container.appendChild(card);
-    });
-  },
-  _advanceCard() {
-    State.currentCardIndex++;
-    const cards=$$(".card");
-    if(State.currentCardIndex<cards.length) cards[State.currentCardIndex].classList.remove("hidden");
-  },
-  like(){
-    const p=this.currentProfile(); if(!p)return;
-    State.likesGiven[p.id]="like"; Storage.save();
-    if(p.likedYou){ Match.onMatch(p);} 
-    this._advanceCard();
-  },
-  dislike(){
-    const p=this.currentProfile(); if(!p)return;
-    State.likesGiven[p.id]="dislike"; Storage.save();
-    this._advanceCard();
-  },
-  currentProfile(){ return State.currentCards[State.currentCardIndex]||null; },
-  _addDrag(card,profile){
-    let startX=0,currentX=0,isDragging=false;
-    const handleMove=(x)=>{
-      if(!isDragging)return;
-      currentX=x-startX;
-      card.style.transform=`translateX(${currentX}px) rotate(${currentX/20}deg)`;
-    };
-    const end=()=>{
-      if(!isDragging)return; isDragging=false;
-      if(currentX>100){ this.like(); card.remove(); }
-      else if(currentX<-100){ this.dislike(); card.remove(); }
-      else{ card.style.transform=""; }
-    };
-    card.addEventListener("mousedown",(e)=>{isDragging=true;startX=e.clientX;});
-    card.addEventListener("mousemove",(e)=>handleMove(e.clientX));
-    card.addEventListener("mouseup",end);
-    card.addEventListener("mouseleave",end);
-    card.addEventListener("touchstart",(e)=>{isDragging=true;startX=e.touches[0].clientX;});
-    card.addEventListener("touchmove",(e)=>handleMove(e.touches[0].clientX));
-    card.addEventListener("touchend",end);
-  }
-};
+/* ---------------------------- Helpers UI (mínimos) ---------------------------- */
+function escapeHtml(str) {
+  return String(str)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;").replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;").replace(/'/g, "&#039;");
+}
 
-/* ---------------------------- Match ---------------------------- */
+/* ---------------------------- Handlers de Botões ---------------------------- */
+function bindEvents() {
+  $("#btn-login-email").addEventListener("click", () => AuthUI.loginEmail().catch(err => alert(err.message)));
+  $("#btn-register-email").addEventListener("click", () => AuthUI.registerEmail().catch(err => alert(err.message)));
+  $("#btn-login-google").addEventListener("click", () => AuthUI.loginGoogle().catch(err => alert(err.message)));
+  $("#btn-login-facebook").addEventListener("click", () => AuthUI.loginFacebook().catch(err => alert(err.message)));
 
-const Match = {
-  onMatch(profile){
-    const place=State.checkin.place;
-    if(!State.matches[place]) State.matches[place]={};
-    if(!State.matches[place][profile.id]) State.matches[place][profile.id]={chat:[]};
-    $("#matchUserA").src=State.user.photo;
-    $("#matchUserB").src=profile.photo;
-    $("#matchText").textContent=`Você e ${profile.name} curtiram um ao outro!`;
-    $("#match-screen").classList.remove("hidden");
-    Storage.save();
-  }
-};
+  $("#btn-checkin").addEventListener("click", () => doCheckin().catch(err => alert(err.message)));
 
-/* ---------------------------- Chat ---------------------------- */
+  $("#btn-like").addEventListener("click", () => Swipe.like().catch(err => alert(err.message)));
+  $("#btn-dislike").addEventListener("click", () => Swipe.dislike().catch(err => alert(err.message)));
 
-const Chat = {
-  quick:["Onde você está?","Vamos brindar? 🍻","Te encontro na pista?","Partiu conversar?","Qual sua música favorita?"],
-  openFromMatch(){
-    const p=Swipe.currentProfile()||State.currentCards[State.currentCardIndex-1];
-    if(!p)return;
-    this.openWith(p.id);
-  },
-  openWith(profileId){
-    const place=State.checkin.place;
-    const p=DB.profiles.find(x=>x.id===profileId);
-    State.chatOpenWith=profileId;
-    $("#match-screen").classList.add("hidden");
-    $("#chat-screen").classList.remove("hidden");
-    $("#chatName").textContent=p.name; $("#chatAvatar").src=p.photo;
-    this.renderMessages();
-    const qr=$("#quickReplies"); qr.innerHTML="";
-    this.quick.forEach(t=>{
-      const b=document.createElement("button");
-      b.className="px-3 py-1 rounded-full border border-gray-300 text-sm";
-      b.textContent=t;
-      b.addEventListener("click",()=>this.send(t));
-      qr.appendChild(b);
-    });
-  },
-  close(){ State.chatOpenWith=null; $("#chat-screen").classList.add("hidden"); },
-  send(textOpt){
-    const input=$("#messageInput");
-    const text=(textOpt||input.value).trim(); if(!text)return;
-    const place=State.checkin.place;
-    if(!State.matches[place][State.chatOpenWith]) State.matches[place][State.chatOpenWith]={chat:[]};
-    const chat=State.matches[place][State.chatOpenWith].chat;
-    chat.push({from:"me",text,ts:Date.now()});
-    setTimeout(()=>{chat.push({from:"them",text:"😄 Bora!",ts:Date.now()});this.renderMessages();Storage.save();},700);
-    input.value=""; this.renderMessages(); Storage.save();
-  },
-  renderMessages(){
-    const container=$("#messages-container");
-    const place=State.checkin.place;
-    const chat=State.matches[place][State.chatOpenWith]?.chat||[];
-    container.innerHTML="";
-    chat.forEach(msg=>{
-      const div=document.createElement("div");
-      div.className=`flex ${msg.from==="me"?"justify-end":"justify-start"}`;
-      div.innerHTML=`<div class="max-w-xs ${msg.from==="me"?"bg-purple-600 text-white":"bg-gray-100"} rounded-lg p-3"><p>${msg.text}</p><p class="text-xs mt-1">${new Date(msg.ts).toLocaleTimeString().slice(0,5)}</p></div>`;
-      container.appendChild(div);
-    });
-    container.scrollTop=container.scrollHeight;
-  }
-};
+  $("#btn-open-chat").addEventListener("click", openChatFromMatch);
+  $("#btn-continue").addEventListener("click", goContinueFromMatch);
 
-/* ---------------------------- Init ---------------------------- */
+  $("#btn-send-chat").addEventListener("click", () => {
+    const text = $("#chat-input").value;
+    Chat.send(text).catch(err => alert(err.message));
+  });
+  $("#btn-close-chat").addEventListener("click", () => Chat.close());
+}
 
-document.addEventListener("DOMContentLoaded",()=>{
-  Storage.load();
-  UI.boot();
+/* ---------------------------- Auth Observer ---------------------------- */
+function startAuthWatcher() {
+  onAuthStateChanged(auth, async (user) => {
+    if (user) {
+      await Profile.ensureUserDoc(user);
+      State.user = await Profile.loadMe();
+      State.isLoggedIn = true;
+      // Vai para check-in (se já tinha place salvo, mantém)
+      if (State.user?.currentPlace) {
+        State.currentPlace = State.user.currentPlace;
+        await Swipe.reloadCards();
+        screenOnly("#swipe-screen");
+      } else {
+        screenOnly("#checkin-screen");
+      }
+    } else {
+      State.user = null;
+      State.isLoggedIn = false;
+      State.currentPlace = null;
+      screenOnly("#auth-screen");
+    }
+  });
+}
+
+/* ---------------------------- Bootstrap ---------------------------- */
+document.addEventListener("DOMContentLoaded", () => {
+  // splash curto
+  setTimeout(() => {
+    screenOnly("#auth-screen");
+  }, 400);
+
+  bindEvents();
+  startAuthWatcher();
 });
-
-/* ---------------------------- Exports ---------------------------- */
-window.UI=UI; window.Auth=Auth; window.Location=Location; window.Swipe=Swipe; window.Chat=Chat;
