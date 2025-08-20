@@ -1,34 +1,175 @@
-/* Transições dos cards */
+/* Reset básico */
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+  font-family: "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+}
+
+body {
+  background: #fafafa;
+  color: #333;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+}
+
+#app {
+  width: 100%;
+  max-width: 400px;
+  height: 100vh;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 4px 20px rgba(0,0,0,0.1);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* Telas */
+.screen {
+  flex: 1;
+  padding: 20px;
+  display: none;
+  overflow-y: auto;
+}
+.screen h1.logo {
+  font-size: 36px;
+  text-align: center;
+  margin-top: 40px;
+  color: #e94057;
+  font-weight: bold;
+}
+.screen h2 {
+  margin-bottom: 20px;
+  text-align: center;
+  color: #333;
+}
+
+.screen.active, .screen:not(.hidden) {
+  display: block;
+}
+
+/* Inputs e botões */
+input, select, button {
+  width: 100%;
+  padding: 12px;
+  margin: 8px 0;
+  border-radius: 10px;
+  border: 1px solid #ddd;
+  font-size: 16px;
+}
+
+button {
+  background: #e94057;
+  color: #fff;
+  border: none;
+  font-weight: bold;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+button:hover {
+  background: #d12f47;
+}
+
+/* Cards de pessoas */
+#cards-container {
+  position: relative;
+  width: 100%;
+  height: 70vh;
+  margin: auto;
+}
+
 .card {
-  transition: transform 0.3s ease, opacity 0.3s ease;
-}
-.swipe-right {
-  transform: translateX(100%) rotate(20deg);
-  opacity: 0;
-}
-.swipe-left {
-  transform: translateX(-100%) rotate(-20deg);
-  opacity: 0;
-}
-
-/* Animação do "Deu Match!" */
-.match-animation {
-  animation: pulse 1.5s infinite;
-}
-@keyframes pulse {
-  0%   { transform: scale(1); }
-  50%  { transform: scale(1.1); }
-  100% { transform: scale(1); }
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  margin: auto;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 6px 15px rgba(0,0,0,0.2);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  text-align: center;
 }
 
-/* Slide-up genérico (opcional) */
-.slide-up {
-  animation: slideUp 0.5s forwards;
-}
-@keyframes slideUp {
-  from { transform: translateY(100%); opacity: 0; }
-  to   { transform: translateY(0);    opacity: 1; }
+.card.hidden {
+  display: none;
 }
 
-/* Badge escondido por padrão (mostrado via JS) */
-#likesBadge.hidden { display: none; }
+.card .photo {
+  flex: 1;
+  background-size: cover;
+  background-position: center;
+}
+
+.card .info {
+  padding: 12px;
+}
+
+.card h3 {
+  margin-bottom: 6px;
+}
+
+/* Ações swipe */
+.actions {
+  display: flex;
+  justify-content: space-around;
+  margin: 16px 0;
+}
+.actions button {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  font-size: 24px;
+}
+
+/* Tela de Match */
+#match-screen {
+  text-align: center;
+}
+#match-screen img.avatar {
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  margin: 10px;
+  object-fit: cover;
+}
+#match-screen h2 {
+  font-size: 28px;
+  color: #e94057;
+  margin-bottom: 10px;
+}
+
+/* Chat */
+#chat-messages {
+  flex: 1;
+  max-height: 50vh;
+  overflow-y: auto;
+  margin-bottom: 12px;
+  padding: 8px;
+}
+.msg {
+  margin: 6px 0;
+}
+.bubble {
+  display: inline-block;
+  padding: 10px 14px;
+  border-radius: 18px;
+  max-width: 70%;
+}
+.bubble.me {
+  background: #e94057;
+  color: white;
+  float: right;
+  clear: both;
+}
+.bubble.them {
+  background: #f0f0f0;
+  float: left;
+  clear: both;
+}
